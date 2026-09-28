@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Global Real-Time Chat</title>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+        body { background: #0f172a; color: #f8fafc; height: 100vh; display: flex; align-items: center; justify-content: center; }
+        .card { background: #1e293b; border-radius: 12px; padding: 2rem; width: 100%; max-width: 450px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+        .hidden { display: none !important; }
+        h2 { margin-bottom: 1rem; color: #38bdf8; text-align: center; }
+        input { width: 100%; padding: 0.75rem; margin-bottom: 1rem; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #fff; outline: none; }
+        button { width: 100%; padding: 0.75rem; border-radius: 6px; border: none; background: #0284c7; color: white; font-weight: bold; cursor: pointer; margin-bottom: 0.5rem; }
+        button:hover { background: #0369a1; }
+        .toggle-btn { background: transparent; color: #94a3b8; text-decoration: underline; font-weight: normal; }
+        .chat-box { height: 350px; overflow-y: auto; border: 1px solid #334155; border-radius: 6px; padding: 1rem; margin-bottom: 1rem; background: #0f172a; display: flex; flex-direction: column; gap: 0.5rem; }
+        .msg { padding: 0.5rem 0.75rem; border-radius: 8px; max-width: 80%; width: fit-content; word-break: break-word; }
+        .msg.me { background: #0284c7; align-self: flex-end; }
+        .msg.them { background: #334155; align-self: flex-start; }
+        .sender-name { font-size: 0.75rem; opacity: 0.7; margin-bottom: 0.2rem; }
+        .error { color: #ef4444; font-size: 0.875rem; margin-bottom: 1rem; text-align: center; }
+    </style>
+</head>
+<body>
+
+<div class="card" id="auth-card">
+    <h2 id="auth-title">Login</h2>
+    <div id="error-msg" class="error"></div>
+    <input type="text" id="username" placeholder="Username">
+    <input type="password" id="password" placeholder="Password">
+    <button id="auth-btn" onclick="handleAuth()">Login</button>
+    <button class="toggle-btn" id="toggle-btn" onclick="toggleAuthMode()">Need an account? Register</button>
+</div>
+
+<div class="card hidden" id="chat-card">
+    <h2 id="welcome-header">Chat Room</h2>
+    <div class="chat-box" id="messages"></div>
+    <div style="display: flex; gap: 0.5rem;">
+        <input type="text" id="msg-input" placeholder="Type a message..." style="margin: 0;" onkeydown="if(event.key==='Enter') sendMessage()">
+        <button onclick="sendMessage()" style="width: auto; padding: 0 1.25rem; margin: 0;">Send</button>
+    </div>
+</div>
+
+<script>
+    let isRegistering = false;
+    let currentUser = "";
+    const socket = io();
+
+    function toggleAuthMode() {
+        isRegistering = !isRegistering;
+        document.getElementById('auth-title').innerText = isRegistering ? "Register" : "Login";
+        document.getElementById('auth-btn').innerText = isRegistering ? "Register Account" : "Login";
+        document.getElementById('toggle-btn').innerText = isRegistering ? "Already have an account? Login" : "Need an account? Register";
+        document.getElementById('error-msg').innerText = "";
+    }
+
+    async function handleAuth() {
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value.trim();
+        const errorEl = document.getElementById('error-msg');
+        errorEl.innerText = "";
+
+        if (!username || !password) return errorEl.innerText = "Please fill in all fields.";
+
+        const endpoint = isRegistering ? '/api/register' : '/api/login';
+        try {
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            const data = await res.json();
+            
+            if (!res.ok) return errorEl.innerText = data.error || "An error occurred.";
+
+            if (isRegistering) {
+                toggleAuthMode();
+                errorEl.style.color = "#22c55e";
+                errorEl.innerText = "Registration successful! Please log in.";
+            } else {
+                currentUser = username;
+                startChat();
+            }
+        } catch (e) {
+            errorEl.innerText = "Server connection error.";
+        }
+    }
+
+    async function startChat() {
+        document.getElementById('auth-card').classList.add('hidden');
+        document.getElementById('chat-card').classList.remove('hidden');
+        document.getElementById('welcome-header').innerText = `Logged in as: ${currentUser}`;
+
+        // Load existing messages
+        const res = await fetch('/api/messages');
+        const msgs = await res.json();
+        msgs.forEach(appendMessage);
+
+        // Listen for new real-time messages
+        socket.on('receive_message', (msg) => {
+            appendMessage(msg);
+        });
+    }
+
+    function sendMessage() {
+        const input = document.getElementById('msg-input');
+        const text = input.value.trim();
+        if (!text) return;
+
+        socket.emit('send_message', { sender: currentUser, text });
+        input.value = "";
+    }
+
+    function appendMessage(msg) {
+        const box = document.getElementById('messages');
+        const el = document.createElement('div');
+        const isMe = msg.sender === currentUser;
+        el.className = `msg ${isMe ? 'me' : 'them'}`;
+        el.innerHTML = `<div class="sender-name">${msg.sender}</div>${msg.text}`;
+        box.appendChild(el);
+        box.scrollTop = box.scrollHeight;
+    }
+</script>
+</body>
+</html>
