@@ -1,7 +1,4 @@
 import os
-from gevent import monkey
-monkey.patch_all()
-
 from flask import Flask, render_template, request, jsonify, session
 from flask_socketio import SocketIO, emit
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -9,10 +6,12 @@ import sqlite3
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'super-secret-key-12345')
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
+
+# Threading mode works out-of-the-box on standard Python without C compiler extensions
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 def get_db():
-    conn = sqlite3.connect('chat.db')
+    conn = sqlite3.connect('chat.db', check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
