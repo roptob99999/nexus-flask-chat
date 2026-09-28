@@ -1,6 +1,6 @@
 import os
-import eventlet
-eventlet.monkey_patch()
+from gevent import monkey
+monkey.patch_all()
 
 from flask import Flask, render_template, request, jsonify, session
 from flask_socketio import SocketIO, emit
@@ -9,7 +9,7 @@ import sqlite3
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'super-secret-key-12345')
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
 
 def get_db():
     conn = sqlite3.connect('chat.db')
